@@ -1,50 +1,41 @@
-# React + TypeScript + Vite
+# SmartBot - Modern AI Chatbot
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A fast, responsive, and feature-rich AI Chatbot built with React, TypeScript, Tailwind CSS, and Vercel Serverless Functions. Powered by the Llama-3.3-70b-versatile model via the Groq API, it features real-time text streaming, Markdown rendering, and chat history persistence.
 
-Currently, two official plugins are available:
+## Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+* **Secure API Handling:** API requests are routed through a Vercel serverless backend to keep your API keys completely hidden from the client.
+* **Real-Time Streaming:** Watch the AI's response type out in real-time, providing a seamless experience.
+* **Local Storage Persistence:** Your chat history is automatically saved to your browser and reloads when you return.
+* **Markdown Support:** Code blocks, bold text, and lists are beautifully rendered using react-markdown.
+* **Copy to Clipboard:** Easily copy bot responses with a single click.
+* **Smart Suggestions:** Interactive prompt suggestions to help start conversations.
+* **Modern UI/UX:** Glassmorphism design, smooth scrolling, and dynamic typing indicators built with Tailwind CSS.
 
-## Expanding the ESLint configuration
+## Tech Stack
 
-If you are developing a production application, we recommend updating the configuration to enable type aware lint rules:
+* **Frontend:** React 18, TypeScript, Vite
+* **Backend:** Vercel Serverless Functions (Node.js)
+* **Styling:** Tailwind CSS (v4)
+* **Icons:** react-icons (Lucide icons)
+* **Markdown:** react-markdown
+* **API / LLM:** Groq API (using llama-3.3-70b-versatile)
 
-- Configure the top-level `parserOptions` property like this:
+## Project Structure
 
-```js
-export default tseslint.config({
-  languageOptions: {
-    // other options...
-    parserOptions: {
-      project: ['./tsconfig.node.json', './tsconfig.app.json'],
-      tsconfigRootDir: import.meta.dirname,
-    },
-  },
-})
-```
-
-- Replace `tseslint.configs.recommended` to `tseslint.configs.recommendedTypeChecked` or `tseslint.configs.strictTypeChecked`
-- Optionally add `...tseslint.configs.stylisticTypeChecked`
-- Install [eslint-plugin-react](https://github.com/jsx-eslint/eslint-plugin-react) and update the config:
-
-```js
-// eslint.config.js
-import react from 'eslint-plugin-react'
-
-export default tseslint.config({
-  // Set the react version
-  settings: { react: { version: '18.3' } },
-  plugins: {
-    // Add the react plugin
-    react,
-  },
-  rules: {
-    // other rules...
-    // Enable its recommended rules
-    ...react.configs.recommended.rules,
-    ...react.configs['jsx-runtime'].rules,
-  },
-})
-```
+```text
+.
+├── api/
+│   └── chat.ts              # Serverless backend function (secures API key & handles streaming)
+├── src/
+│   ├── components/
+│   │   └── ChatComponent.tsx    # Main UI layout, chat interface, and input handling
+│   ├── hooks/
+│   │   ├── useChatbot.ts        # Handles fetching to /api/chat, state, and LocalStorage
+│   │   └── useChatScroll.ts     # Auto-scrolls to the newest message automatically
+│   ├── App.tsx                  # Root component layout
+│   ├── App.css                  # Global styles
+│   ├── main.tsx                 # React DOM rendering
+│   └── index.css                # Tailwind CSS imports
+├── .env                     # Environment variables (Backend Secrets)
+└── package.json             # Project dependencies
