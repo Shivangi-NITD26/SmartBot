@@ -1,4 +1,6 @@
 import * as React from "react";
+import remarkGfm from "remark-gfm";
+import rehypeRaw from "rehype-raw";
 import { 
   LuBot, 
   LuSendHorizontal, 
@@ -6,11 +8,15 @@ import {
   LuUser, 
   LuCopy, 
   LuCheck, 
-  LuSparkles 
+  LuSparkles,
+  LuSquare,
+  LuMic
 } from "react-icons/lu";
 import useChatbot from "../hooks/useChatbot";
 import Markdown from "react-markdown";
 import useChatScroll from "../hooks/useChatScroll";
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
 const SUGGESTIONS = [
   "Can you help me write a professional email?",
@@ -22,11 +28,62 @@ const SUGGESTIONS = [
 const ChatComponent: React.FunctionComponent = () => {
   const [input, setInput] = React.useState("");
   const [copiedIndex, setCopiedIndex] = React.useState<number | null>(null);
-  const { messages, sendMessage, isLoading, clearChat } = useChatbot();
+  
+  const [isListening, setIsListening] = React.useState(false);
+  const recognitionRef = React.useRef<any>(null);
+
+  const { messages, sendMessage, isLoading, clearChat, stopGenerating } = useChatbot();
   const ref = useChatScroll(messages);
+
+  React.useEffect(() => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    
+    if (SpeechRecognition) {
+      const recognition = new SpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = 'en-US';
+
+      recognition.onresult = (event: any) => {
+        let transcript = "";
+        for (let i = 0; i < event.results.length; i++) {
+          transcript += event.results[i][0].transcript;
+        }
+        setInput(transcript);
+      };
+
+      recognition.onerror = (event: any) => {
+        console.error("Speech recognition error", event.error);
+        setIsListening(false);
+      };
+
+      recognition.onend = () => {
+        setIsListening(false);
+      };
+
+      recognitionRef.current = recognition;
+    } else {
+      console.warn("Speech Recognition API is not supported in this browser.");
+    }
+  }, []);
+
+  const toggleListening = () => {
+    if (isListening) {
+      recognitionRef.current?.stop();
+      setIsListening(false);
+    } else {
+      setInput("");
+      recognitionRef.current?.start();
+      setIsListening(true);
+    }
+  };
 
   const handleSend = () => {
     if (input.trim() && !isLoading) {
+      if (isListening) {
+        recognitionRef.current?.stop();
+        setIsListening(false);
+      }
       sendMessage(input);
       setInput("");
     }
@@ -92,9 +149,33 @@ const ChatComponent: React.FunctionComponent = () => {
                         : "bg-white border border-gray-100 text-gray-800 rounded-tl-none"
                     }`}
                   >
-                    <Markdown className={`prose max-w-none ${msg.sender === 'user' ? 'text-white prose-p:text-white prose-strong:text-white' : 'text-gray-800'}`}>
-                      {msg.text}
-                    </Markdown>
+                  <Markdown 
+                    remarkPlugins={[remarkGfm]}
+                    rehypePlugins={[rehypeRaw]}
+                    className={`prose prose-sm md:prose-base max-w-none break-words ${msg.sender === 'user' ? 'text-white prose-p:text-white prose-strong:text-white prose-a:text-white' : 'text-gray-800'}`}
+                    components={{
+                      code({ node, className, children, ...rest }: any) {
+                        const match = /language-(\w+)/.exec(className || '');
+                        return match ? (
+                          <div className="relative mt-4 mb-4 rounded-xl overflow-hidden shadow-sm border border-gray-700/50">
+                            <SyntaxHighlighter
+                              PreTag="div"
+                              children={String(children).replace(/\n$/, '')}
+                              language={match[1]}
+                              style={vscDarkPlus as any}
+                              customStyle={{ margin: 0, padding: '1rem', background: '#1e1e1e', fontSize: '0.875rem' }}
+                            />
+                          </div>
+                        ) : (
+                          <code {...rest} className="bg-gray-100 text-pink-600 px-1.5 py-0.5 rounded-md text-sm font-mono font-semibold">
+                            {children}
+                          </code>
+                        )
+                      }
+                    }}
+                  >
+                    {msg.text}
+                  </Markdown>
                   </div>
 
                   {msg.sender === "bot" && index !== 0 && (
@@ -144,24 +225,43 @@ const ChatComponent: React.FunctionComponent = () => {
           <div className="max-w-4xl mx-auto relative flex items-center">
             <input
               type="text"
-              className="flex-1 w-full p-4 pr-16 bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10 transition-all text-gray-700"
-              placeholder="Ask me anything..."
+              className="flex-1 w-full p-4 pr-24 bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10 transition-all text-gray-700 disabled:opacity-50"
+              placeholder={isListening ? "Listening..." : "Ask me anything..."}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyPress}
               disabled={isLoading}
             />
-            <button
-              onClick={handleSend}
-              disabled={isLoading || !input.trim()}
-              className={`absolute right-2 p-2.5 rounded-xl flex items-center justify-center transition-all duration-200 ${
-                isLoading || !input.trim()
-                  ? "bg-transparent text-gray-400 cursor-not-allowed"
-                  : "bg-blue-600 text-white hover:bg-blue-700 shadow-md hover:shadow-lg hover:-translate-y-0.5"
-              }`}
-            >
-              <LuSendHorizontal size={20} />
-            </button>
+            
+            <div className="absolute right-2 flex items-center gap-1">
+              <button
+                onClick={toggleListening}
+                disabled={isLoading}
+                className={`p-2.5 rounded-xl flex items-center justify-center transition-all duration-200 ${
+                  isListening
+                    ? "bg-red-100 text-red-500 animate-pulse"
+                    : "bg-transparent text-gray-400 hover:text-gray-600 hover:bg-gray-200"
+                }`}
+                title={isListening ? "Stop listening" : "Start Voice Input"}
+              >
+                <LuMic size={20} />
+              </button>
+
+              <button
+                onClick={isLoading ? stopGenerating : handleSend}
+                disabled={!isLoading && !input.trim() && !isListening}
+                className={`p-2.5 rounded-xl flex items-center justify-center transition-all duration-200 ${
+                  !isLoading && !input.trim()
+                    ? "bg-transparent text-gray-400 cursor-not-allowed"
+                    : isLoading
+                    ? "bg-red-500 text-white hover:bg-red-600 shadow-md hover:shadow-lg hover:-translate-y-0.5 animate-pulse"
+                    : "bg-blue-600 text-white hover:bg-blue-700 shadow-md hover:shadow-lg hover:-translate-y-0.5"
+                }`}
+                title={isLoading ? "Stop generating" : "Send message"}
+              >
+                {isLoading ? <LuSquare size={20} className="fill-current" /> : <LuSendHorizontal size={20} />}
+              </button>
+            </div>
           </div>
           <p className="text-center text-xs text-gray-400 mt-3 font-medium">
             AI can make mistakes. Consider verifying important information.

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useRef } from "react";
 
 export interface Message {
   text: string;
@@ -8,27 +8,23 @@ export interface Message {
 const DEFAULT_GREETING = "Hello! I am SmartBot. How can I help you today?";
 
 const useChatbot = () => {
-  const [messages, setMessages] = useState<Message[]>(() => {
-    const savedChat = localStorage.getItem("my_ai_chat_history");
-    if (savedChat) {
-      try {
-        return JSON.parse(savedChat);
-      } catch (e) {
-        return [{ text: DEFAULT_GREETING, sender: "bot" }];
-      }
-    }
-    return [{ text: DEFAULT_GREETING, sender: "bot" }];
-  });
-  
+  const [messages, setMessages] = useState<Message[]>([
+    { text: DEFAULT_GREETING, sender: "bot" }
+  ]);
   const [isLoading, setIsLoading] = useState(false);
-
-  useEffect(() => {
-    localStorage.setItem("my_ai_chat_history", JSON.stringify(messages));
-  }, [messages]);
+  
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const clearChat = () => {
     setMessages([{ text: DEFAULT_GREETING, sender: "bot" }]);
-    localStorage.removeItem("my_ai_chat_history");
+  };
+
+  const stopGenerating = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+      setIsLoading(false);
+    }
   };
 
   const sendMessage = async (message: string) => {
@@ -39,18 +35,22 @@ const useChatbot = () => {
     setMessages(newMessages);
     setIsLoading(true);
 
+    abortControllerRef.current = new AbortController();
+
     try {
       const apiMessages = [
-        { role: "system", content: "You are a highly intelligent and helpful AI assistant. Answer formatting in Markdown." },
+        { 
+          role: "system", 
+          content: "You are a highly intelligent and helpful AI assistant. You format your answers dynamically based on what makes the most sense for the user's prompt. Use rich, flowing paragraphs for stories, essays, and conversational replies. Use bullet points or numbered lists when providing lists, steps, interview questions, or recipes. Use markdown to make your text beautiful and easy to read." 
+        },
         ...newMessages
-          .filter(msg => msg.text !== DEFAULT_GREETING) 
+          .filter(msg => msg.text !== DEFAULT_GREETING)
           .map((msg) => ({
             role: msg.sender === "user" ? "user" : "assistant",
             content: msg.text,
           }))
       ];
 
-      // SECURE CHANGE: Call our own backend instead of Groq directly
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: {
@@ -59,6 +59,7 @@ const useChatbot = () => {
         body: JSON.stringify({
           messages: apiMessages,
         }),
+        signal: abortControllerRef.current.signal, 
       });
 
       if (!response.ok) {
@@ -101,19 +102,28 @@ const useChatbot = () => {
               console.error("Error parsing stream chunk", err);
             }
           }
-        }
-      }
+        } 
+        
+        await new Promise((resolve) => setTimeout(resolve, 30));
+      } 
     } catch (error: any) {
-      console.error("Error fetching AI response:", error);
+      if (error.name === "AbortError") {
+        console.log("Generation stopped by user");
+      } else {
+        console.error("Error fetching AI response:", error);
+        setIsLoading(false);
+        setMessages((prev) => [
+          ...prev,
+          { text: `🛑 **ERROR:** ${error.message}`, sender: "bot" },
+        ]);
+      }
+    } finally {
       setIsLoading(false);
-      setMessages((prev) => [
-        ...prev,
-        { text: `🛑 **ERROR:** ${error.message}`, sender: "bot" },
-      ]);
+      abortControllerRef.current = null;
     }
   };
 
-  return { messages, sendMessage, isLoading, clearChat };
+  return { messages, sendMessage, isLoading, clearChat, stopGenerating };
 };
 
 export default useChatbot;
